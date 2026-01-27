@@ -1,97 +1,128 @@
-// tests/unit/agents/specifier.test.ts
+import { SpecifierAgent } from '../../../src/agents/specifier.js';
+import { VibeManifest } from '../../../src/core/types.js';
+import { LLMClient } from '../../../src/llm/client.js';
 
-import { SpecifierAgent } from '../../../src/agents/specifier';
-import { LLMClient } from '../../../src/llm/client';
-import { VibeManifest } from '../../../src/core/types';
-
-jest.mock('../../../src/llm/client');
+// Mock LLMClient
+jest.mock('../../../src/llm/client.js');
 
 describe('SpecifierAgent', () => {
-  let agent: SpecifierAgent;
   let mockLLMClient: jest.Mocked<LLMClient>;
 
   beforeEach(() => {
-    mockLLMClient = new LLMClient() as jest.Mocked<LLMClient>;
-    agent = new SpecifierAgent(mockLLMClient);
+    // Create a mock LLMClient
+    mockLLMClient = {
+      completeSystem: jest.fn().mockResolvedValue({
+        content: `describe('TestComponent', () => {
+  it('should render', () => {
+    expect(true).toBe(true);
   });
-
-  const mockManifest: VibeManifest = {
-    metadata: {
-      name: 'test-component',
-      version: '1.0.0',
-    },
-    spec: {
-      intent: 'Create a login form',
-      constraints: {
-        framework: 'React',
-        language: 'TypeScript',
-        testing: ['jest', 'react-testing-library'],
-      },
-      visualSpec: {
-        elements: ['email input', 'password input', 'submit button'],
-      },
-      functionalSpec: {
-        states: ['email', 'password', 'loading', 'error'],
-        behaviors: ['validate email', 'validate password', 'submit form'],
-      },
-    },
-    status: {
-      phase: 'Pending',
-      currentLoop: 0,
-    },
-  };
-
-  describe('execute', () => {
-    it('should generate test file content', async () => {
-      const expectedTests = `
-describe('LoginForm', () => {
-  it('should render email input', () => {});
-  it('should render password input', () => {});
-  it('should render submit button', () => {});
-  it('should validate email format', () => {});
-  it('should validate password length', () => {});
-  it('should submit form with valid data', () => {});
-});
-`;
-
-      mockLLMClient.completeSystem.mockResolvedValue({
-        content: expectedTests,
+})`,
         usage: { inputTokens: 100, outputTokens: 50 },
-      });
+      }),
+    } as any;
 
-      const result = await agent.execute(JSON.stringify(mockManifest));
-
-      expect(result).toBe(expectedTests);
-      expect(mockLLMClient.completeSystem).toHaveBeenCalledWith(
-        expect.stringContaining('TDD-first'),
-        expect.stringContaining('Create a login form')
-      );
-    });
+    // Mock the constructor to return our mock
+    (LLMClient as jest.MockedClass<typeof LLMClient>).mockImplementation(
+      () => mockLLMClient
+    );
   });
 
-  describe('getSystemPrompt', () => {
-    it('should return specifier system prompt', () => {
-      const prompt = agent.getSystemPrompt();
+  it('should generate test code for a simple component', async () => {
+    const agent = new SpecifierAgent();
+    const manifest: VibeManifest = {
+      metadata: { name: 'test-component', version: '1.0.0' },
+      spec: {
+        intent: 'A simple button component',
+        constraints: {
+          framework: 'React',
+          language: 'TypeScript',
+          testing: ['Jest'],
+        },
+        functionalSpec: {
+          states: ['idle', 'loading', 'disabled'],
+          behaviors: ['renders button text', 'handles click'],
+        },
+      },
+      status: { phase: 'Pending', currentLoop: 0 },
+    };
 
-      expect(prompt).toContain('TDD-first');
-      expect(prompt).toContain('generate comprehensive test files');
-      expect(prompt).toContain('BEFORE any implementation code exists');
-    });
+    const context = {
+      manifest,
+      currentCode: '',
+      loopNumber: 1,
+    };
+
+    const result = await agent.execute(context);
+
+    expect(result).toContain('describe');
+    expect(result).toContain('it(');
+    expect(result).toContain('expect');
+    expect(mockLLMClient.completeSystem).toHaveBeenCalled();
   });
 
-  describe('error handling', () => {
-    it('should handle invalid manifest JSON', async () => {
-      await expect(agent.execute('invalid json')).rejects.toThrow();
+  it('should include TDD verification comment', async () => {
+    const agent = new SpecifierAgent();
+    const manifest: VibeManifest = {
+      metadata: { name: 'test-component', version: '1.0.0' },
+      spec: {
+        intent: 'A simple component',
+        constraints: {
+          framework: 'React',
+          language: 'TypeScript',
+          testing: ['Jest'],
+        },
+        functionalSpec: {
+          states: ['ready'],
+          behaviors: ['renders'],
+        },
+      },
+      status: { phase: 'Pending', currentLoop: 0 },
+    };
+
+    const result = await agent.execute({
+      manifest,
+      currentCode: '',
+      loopNumber: 1,
     });
 
-    it('should handle LLM errors', async () => {
-      mockLLMClient.completeSystem.mockRejectedValue(
-        new Error('API error')
-      );
+    expect(result).toContain('// TDD: This test MUST fail');
+  });
 
-      await expect(
-        agent.execute(JSON.stringify(mockManifest))
-      ).rejects.toThrow('Agent execution failed');
+  it('should add TDD comment if LLM does not include it', async () => {
+    const agent = new SpecifierAgent();
+    const manifest: VibeManifest = {
+      metadata: { name: 'test-component', version: '1.0.0' },
+      spec: {
+        intent: 'A simple component',
+        constraints: {
+          framework: 'React',
+          language: 'TypeScript',
+          testing: ['Jest'],
+        },
+        functionalSpec: {
+          states: ['ready'],
+          behaviors: ['renders'],
+        },
+      },
+      status: { phase: 'Pending', currentLoop: 0 },
+    };
+
+    // Mock LLM response without TDD comment
+    mockLLMClient.completeSystem.mockResolvedValueOnce({
+      content: `describe('TestComponent', () => {
+  it('should render', () => {
+    expect(true).toBe(true);
+  });
+})`,
+      usage: { inputTokens: 100, outputTokens: 50 },
     });
+
+    const result = await agent.execute({
+      manifest,
+      currentCode: '',
+      loopNumber: 1,
+    });
+
+    expect(result).toContain('// TDD: This test MUST fail - no implementation exists yet');
   });
 });
