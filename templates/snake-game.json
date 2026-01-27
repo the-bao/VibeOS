@@ -1,0 +1,31 @@
+{
+  "metadata": {
+    "name": "snake-game",
+    "version": "1.0.0"
+  },
+  "spec": {
+    "intent": "一个经典贪吃蛇游戏，玩家通过方向键控制蛇的移动，吃到食物增加长度和分数，撞墙或撞到自己游戏结束",
+    "constraints": {
+      "framework": "React",
+      "language": "TypeScript",
+      "testing": ["Jest", "React Testing Library"]
+    },
+    "visualSpec": {
+      "style": "minimalist",
+      "elements": ["canvas", "score-display", "game-over-screen"]
+    },
+    "functionalSpec": {
+      "states": ["playing", "game-over", "paused"],
+      "behaviors": [
+        "蛇每帧移动一格",
+        "吃到食物身体增长",
+        "碰撞检测触发游戏结束",
+        "分数实时更新"
+      ]
+    }
+  },
+  "status": {
+    "phase": "Pending",
+    "currentLoop": 0
+  }
+}
