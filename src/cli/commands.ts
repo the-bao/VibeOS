@@ -12,6 +12,7 @@ export function registerCommands(program: Command): void {
     .option('-m, --manifest <path>', 'Path to Vibe manifest file')
     .option('-w, --watch', 'Watch for changes and auto-reconcile (not yet implemented)')
     .option('--max-loops <number>', 'Maximum reconciliation iterations', '10')
+    .option('--api-url <url>', 'Custom API endpoint URL (overrides ANTHROPIC_BASE_URL)')
     .action(async (options) => {
       console.log('VibeOS Reconciliation starting...');
       console.log('');
@@ -40,8 +41,14 @@ export function registerCommands(program: Command): void {
       console.log(`Intent: ${manifest.spec.intent}`);
       console.log('');
 
-      // Run reconciliation
-      const llmClient = new LLMClient();
+      // Create LLM client with optional custom API URL
+      const llmClientConfig: any = {};
+      if (options.apiUrl || process.env.ANTHROPIC_BASE_URL) {
+        llmClientConfig.baseURL = options.apiUrl || process.env.ANTHROPIC_BASE_URL;
+        console.log(`Using custom API endpoint: ${llmClientConfig.baseURL}`);
+      }
+      const llmClient = new LLMClient(llmClientConfig);
+
       const engine = new ReconciliationEngine(llmClient, {
         maxTotalLoops: parseInt(options.maxLoops, 10),
       });

@@ -22,18 +22,49 @@ export interface LLMResponse {
  */
 type ContentBlock = Anthropic.ContentBlock;
 
+export interface LLMClientConfig {
+  apiKey?: string;
+  baseURL?: string;
+  timeout?: number;
+}
+
 export class LLMClient {
   private client: Anthropic;
 
-  constructor(apiKey?: string) {
+  constructor(config?: LLMClientConfig | string) {
+    // Support both string (apiKey) and object config
+    let apiKey: string | undefined;
+    let baseURL: string | undefined;
+    let timeout = 60 * 1000;
+
+    if (typeof config === 'string') {
+      // Backward compatibility: constructor(apiKey)
+      apiKey = config;
+    } else if (config && typeof config === 'object') {
+      apiKey = config.apiKey;
+      baseURL = config.baseURL;
+      timeout = config.timeout || 60 * 1000;
+    }
+
     const key = apiKey || process.env.ANTHROPIC_API_KEY;
+    const apiUrl = baseURL || process.env.ANTHROPIC_BASE_URL;
+
     if (!key) {
       throw new Error('API key is required. Provide it as argument or set ANTHROPIC_API_KEY environment variable.');
     }
-    this.client = new Anthropic({
+
+    // Use custom baseURL if provided, otherwise use default
+    const clientConfig: any = {
       apiKey: key,
-      timeout: 60 * 1000, // 60 seconds default timeout
-    });
+      timeout,
+    };
+
+    if (apiUrl) {
+      clientConfig.baseURL = apiUrl;
+      console.log(`Using custom API endpoint: ${apiUrl}`);
+    }
+
+    this.client = new Anthropic(clientConfig);
   }
 
   async complete(
